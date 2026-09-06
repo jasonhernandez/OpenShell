@@ -768,11 +768,16 @@ fn run_debugfs(image_path: &Path, command: &str) -> Result<(), String> {
     ))
 }
 
+// e2fsprogs installs into sbin directories that user sessions often drop from
+// PATH: keg-only Homebrew prefixes on macOS, the system sbin dirs on Linux.
 fn e2fs_tool_candidates(tool: &str) -> Vec<PathBuf> {
     let mut candidates = vec![PathBuf::from(tool)];
     for root in ["/opt/homebrew/opt/e2fsprogs", "/usr/local/opt/e2fsprogs"] {
         candidates.push(Path::new(root).join("sbin").join(tool));
         candidates.push(Path::new(root).join("bin").join(tool));
+    }
+    for dir in ["/usr/local/sbin", "/usr/sbin", "/sbin"] {
+        candidates.push(Path::new(dir).join(tool));
     }
     candidates
 }
@@ -1214,6 +1219,16 @@ mod tests {
             attempted,
             vec![PathBuf::from("first"), PathBuf::from("second")]
         );
+    }
+
+    #[test]
+    fn e2fs_tool_candidates_cover_homebrew_and_system_sbin() {
+        let candidates = e2fs_tool_candidates("debugfs");
+
+        assert_eq!(candidates.first(), Some(&PathBuf::from("debugfs")));
+        assert!(candidates.contains(&PathBuf::from("/opt/homebrew/opt/e2fsprogs/sbin/debugfs")));
+        assert!(candidates.contains(&PathBuf::from("/usr/sbin/debugfs")));
+        assert!(candidates.contains(&PathBuf::from("/sbin/debugfs")));
     }
 
     fn unique_temp_dir() -> PathBuf {
